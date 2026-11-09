@@ -1,0 +1,248 @@
+object FormPrincipal: TFormPrincipal
+  Left = 250
+  Height = 320
+  Top = 200
+  Width = 980
+  Caption = 'By Alberto Caro'
+  ClientHeight = 320
+  ClientWidth = 980
+  Color = 15790320
+  DesignTimePPI = 96
+  DoubleBuffered = True
+  Font.CharSet = ANSI_CHARSET
+  Font.Color = clBlack
+  Font.Height = -12
+  Font.Name = 'Segoe UI'
+  Font.Pitch = fpVariable
+  Font.Quality = fqDraft
+  Position = poScreenCenter
+  ShowHint = True
+  LCLVersion = '4.8.0.0'
+  OnClose = FormClose
+  OnCreate = FormCreate
+  object ChkConectarSerial: TCheckBox
+    Left = 8
+    Height = 22
+    Top = 8
+    Width = 100
+    Caption = 'COM2 On/Off'
+    Checked = True
+    Font.CharSet = ANSI_CHARSET
+    Font.Color = clBlack
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Pitch = fpVariable
+    Font.Quality = fqDraft
+    Font.Style = [fsBold]
+    Hint = 'Activa/Desactiva recepción por Puerto Serial COM2'
+    ParentFont = False
+    ParentShowHint = False
+    ShowHint = True
+    State = cbChecked
+    TabOrder = 0
+    OnChange = ChkConectarSerialChange
+  end
+  object ChkEnviarTCP: TCheckBox
+    Left = 116
+    Height = 22
+    Top = 8
+    Width = 135
+    Caption = 'TCP Server On/Off'
+    Checked = True
+    Font.CharSet = ANSI_CHARSET
+    Font.Color = clBlack
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Pitch = fpVariable
+    Font.Quality = fqDraft
+    Font.Style = [fsBold]
+    Hint = 'Activa/Desactiva envío a Server TCP/IP Lazarus (Puerto 9000)'
+    ParentFont = False
+    ParentShowHint = False
+    ShowHint = True
+    State = cbChecked
+    TabOrder = 1
+  end
+  object LblEstado: TLabel
+    Left = 260
+    Height = 18
+    Top = 10
+    Width = 515
+    AutoSize = False
+    Caption = 'COM2: Iniciando... | TCP: Listo'
+    Font.CharSet = ANSI_CHARSET
+    Font.Color = 5263440
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Pitch = fpVariable
+    Font.Quality = fqDraft
+    ParentColor = False
+    ParentFont = False
+  end
+  object BtnSave: TBitBtn
+    Left = 785
+    Height = 26
+    Top = 5
+    Width = 80
+    Anchors = [akTop, akRight]
+    Caption = 'Save'
+    Font.CharSet = ANSI_CHARSET
+    Font.Color = clBlack
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Pitch = fpVariable
+    Font.Quality = fqDraft
+    Hint = 'Captura Serie de Tiempo'
+    ParentFont = False
+    ParentShowHint = False
+    ShowHint = True
+    TabOrder = 2
+    OnClick = BtnSaveClick
+  end
+  object BtnOnOff: TBitBtn
+    Left = 875
+    Height = 26
+    Top = 5
+    Width = 88
+    Anchors = [akTop, akRight]
+    Caption = 'On/off'
+    Font.CharSet = ANSI_CHARSET
+    Font.Color = clBlack
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Pitch = fpVariable
+    Font.Quality = fqDraft
+    Hint = 'Activa/Desactiva Grilla Serie de Tiempo'
+    ParentFont = False
+    ParentShowHint = False
+    ShowHint = True
+    TabOrder = 3
+    OnClick = BtnOnOffClick
+  end
+  object GraficoMP25: TChart
+    Left = 8
+    Height = 278
+    Top = 34
+    Width = 964
+    AxisList = <    
+      item
+        Grid.Color = clGray
+        Grid.Style = psDot
+        Marks.LabelBrush.Style = bsClear
+        Minors = <>
+        Title.LabelFont.Orientation = 900
+        Title.LabelFont.Style = [fsBold]
+        Title.Visible = True
+        Title.Caption = '[ug/m3]'
+        Title.LabelBrush.Style = bsClear
+      end    
+      item
+        Alignment = calBottom
+        Grid.Color = clGray
+        Grid.Style = psDot
+        Intervals.MinLength = 10
+        Intervals.NiceSteps = '1'
+        Marks.LabelBrush.Style = bsClear
+        Minors = <>
+        Title.LabelFont.Style = [fsBold]
+        Title.Visible = True
+        Title.Caption = 'Sampling MP 2.5um'
+        Title.LabelBrush.Style = bsClear
+      end>
+    Extent.UseXMax = True
+    Extent.UseXMin = True
+    Extent.UseYMax = True
+    Extent.UseYMin = True
+    Extent.XMax = 29
+    Extent.XMin = 0
+    Extent.YMax = 200
+    Extent.YMin = 0
+    Legend.Alignment = laTopRight
+    Legend.Frame.Visible = True
+    Legend.Visible = True
+    Title.Brush.Style = bsClear
+    Title.Font.Color = clBlack
+    Title.Font.Height = -15
+    Title.Font.Style = [fsBold]
+    Title.Text.Strings = (
+      'Material Particulado 2.5 um'
+    )
+    Title.Visible = True
+    Anchors = [akTop, akLeft, akRight, akBottom]
+    DoubleBuffered = True
+    object SerieMP25: TLineSeries
+      Title = 'MP 2.5 um'
+      LinePen.Color = clRed
+      LinePen.Width = 2
+      Marks.Clipped = False
+      Marks.Distance = 10
+      Marks.Format = '%0:.9g'
+      Marks.Frame.Color = clBlack
+      Marks.Frame.Visible = True
+      Marks.LabelBrush.Color = 16775408
+      Marks.LabelBrush.Style = bsSolid
+      Marks.LabelFont.Color = clBlack
+      Marks.LinkPen.Visible = True
+      Marks.Style = smsValue
+      Marks.Visible = True
+      Pointer.Brush.Color = 14194744
+      Pointer.HorizSize = 4
+      Pointer.Pen.Color = clNavy
+      Pointer.Style = psRectangle
+      Pointer.VertSize = 4
+      Pointer.Visible = True
+      SeriesColor = clRed
+      ShowPoints = True
+    end
+  end
+  object BtnClickFondo: TBitBtn
+    Left = 880
+    Height = 36
+    Top = 236
+    Width = 85
+    Anchors = [akRight, akBottom]
+    Caption = 'Click'
+    Font.CharSet = ANSI_CHARSET
+    Font.Color = clBlack
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Pitch = fpVariable
+    Font.Quality = fqDraft
+    Hint = 'Cambia BackGround Serie de Tiempo'
+    ParentFont = False
+    ParentShowHint = False
+    ShowHint = True
+    TabOrder = 4
+    OnClick = BtnClickFondoClick
+  end
+  object PuertoSerial: TLazSerial
+    Active = False
+    BaudRate = br__9600
+    DataBits = db8bits
+    Parity = pNone
+    FlowControl = fcNone
+    StopBits = sbOne
+    SynSer.Tag = 0
+    SynSer.Handle = -1
+    SynSer.RaiseExcept = False
+    SynSer.TestDSR = False
+    SynSer.TestCTS = False
+    SynSer.MaxLineLength = 0
+    SynSer.DeadlockTimeout = 30000
+    SynSer.LinuxLock = False
+    SynSer.ConvertLineEnd = False
+    SynSer.AtTimeout = 1000
+    SynSer.InterPacketTimeout = True
+    Device = 'COM2'
+    RcvLineCRLF = True
+    OnRxData = PuertoSerialRxData
+    Left = 24
+    Top = 72
+  end
+  object TimerReconexion: TTimer
+    Interval = 2000
+    OnTimer = TimerReconexionTimer
+    Left = 72
+    Top = 72
+  end
+end

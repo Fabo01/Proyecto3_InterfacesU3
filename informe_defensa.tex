@@ -1,0 +1,192 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{float}
+
+\definecolor{azuluct}{RGB}{20, 65, 130}
+\definecolor{grisoscuro}{RGB}{50, 60, 70}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=azuluct,
+    urlcolor=azuluct,
+    pdftitle={Informe de Arquitectura y Guia de Estudio - Proyecto 3 Interfaces Graficas},
+    pdfauthor={Fabian Garcia}
+}
+
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+
+\title{\textbf{\textcolor{azuluct}{Informe de Arquitectura, Flujos y Funcionamiento}}\\
+\Large Proyecto \#3 (Unidad III) --- Monitoreo de Material Particulado MP 2.5 $\mu\text{m}$\\
+\normalsize Interfaces Gráficas (INFO1128) --- Universidad Católica de Temuco}
+\author{Fabián García \\ \small Profesor: Alberto Caro --- Ayudante: Daniela Romero}
+\date{Noviembre 2026}
+
+\begin{document}
+
+\maketitle
+\vspace{-0.5em}
+\hrule
+\vspace{0.8em}
+
+\section{Arquitectura General y Flujo de Datos de Punta a Punta}
+
+El proyecto consiste en un sistema de monitoreo en tiempo real para medir y graficar la concentración de \textbf{Material Particulado fino ($\text{MP}_{2.5}\,\mu\text{g/m}^3$)}, conectando cuatro programas independientes que se comunican entre sí paso a paso:
+
+\begin{enumerate}[leftmargin=1.5em, itemsep=0.3em]
+    \item \textbf{Simulador Serial en Python (\texttt{2\_simulador\_serial/simulador\_serial.py}):}
+    Hace el papel del sensor físico de calidad del aire. Una vez por segundo genera una medición simulada siguiendo una \textbf{Distribución Normal(80, 5)} y la transmite como texto por el puerto serial \texttt{COM2} a 9600 baudios (configuración \texttt{8N1}).
+
+    \item \textbf{Puente Serial Virtual en VSPE (\texttt{Connector} en \texttt{COM2}):}
+    En Windows, un puerto serial normal solo puede ser usado por un programa a la vez; si un segundo programa intenta abrirlo, el sistema lanza error de acceso denegado. Al crear un dispositivo tipo \textbf{\texttt{Connector}} sobre \texttt{COM2} en VSPE, se habilita un puerto virtual compartido donde Python puede escribir y Lazarus puede leer simultáneamente sin bloquearse.
+
+    \item \textbf{Visor Gráfico en Lazarus (\texttt{3\_visor\_mp25\_lazarus/main.pas}):}
+    Es la ventana principal del proyecto (\emph{``By Alberto Caro''}). Escucha el puerto \texttt{COM2} con el componente \texttt{TLazSerial} y, cada vez que recibe una muestra, desplaza la curva un lugar hacia la izquierda (\textbf{Scrolling Left} sobre 30 muestras fijas del \texttt{0} al \texttt{29}). Además permite activar o desactivar la grilla (\texttt{On/off}), rotar entre 6 paisajes de fondo (\texttt{Click}), guardar una foto del gráfico en \texttt{captura.png} (\texttt{Save}) y reenviar inmediatamente el valor medido por red local hacia el puerto TCP \texttt{9000}.
+
+    \item \textbf{Servidor TCP/IP en Consola Lazarus (\texttt{1\_server\_tcp\_lazarus/server\_tcp.lpr}):}
+    Es un programa de consola puro que escucha en el puerto TCP \texttt{9000}. Cada vez que el visor le envía un valor de $\text{MP}_{2.5}$, el servidor toma la fecha y hora actual del computador, guarda el registro en la base de datos SQLite \textbf{\texttt{aire.db}} (dentro de la tabla \textbf{\texttt{Aire}}) y muestra por consola la fila recién insertada.
+
+    \item \textbf{Inspección en HeidiSQL y Visualización Web con QuickChart (\texttt{4\_quickchart\_web/app\_quickchart.py}):}
+    Como la base de datos SQLite trabaja en modo concurrente (\texttt{WAL}), podemos abrir \texttt{aire.db} en \textbf{HeidiSQL 12.3} para ver cómo entran los registros en vivo segundo a segundo, y al mismo tiempo levantar un servidor web en \textbf{Flask} (puerto \texttt{5000}) que toma las últimas 20 mediciones de la tabla \texttt{Aire} y genera una gráfica en la nube usando la API de \textbf{QuickChart.io}.
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}llllp{5.3cm}@{}}
+\toprule
+\textbf{Tramo} & \textbf{Medio} & \textbf{Configuración} & \textbf{Qué viaja} & \textbf{Función en el flujo} \\ \midrule
+Python $\rightarrow$ Visor & Serial (\texttt{COM2}) & 9600 Bps, 8N1, 1 seg & \texttt{<valor>\textbackslash r\textbackslash n} & Entrega la lectura del sensor al visor gráfico. \\ \addlinespace
+Visor $\rightarrow$ Server TCP & Socket TCP & \texttt{127.0.0.1:9000} & \texttt{<valor>\textbackslash n} & Reenvía el dato al servidor de consola. \\ \addlinespace
+Server TCP $\rightarrow$ SQLite & Archivo local & Modo \texttt{WAL} activo & \texttt{fecha, hora, mp25} & Guarda el historial en la tabla \texttt{Aire} de \texttt{aire.db}. \\ \addlinespace
+HeidiSQL $\rightarrow$ SQLite & \texttt{sqlite3.dll} & Lectura en vivo & \texttt{SELECT * FROM Aire} & Permite revisar la tabla en tiempo real sin bloquear al servidor. \\ \addlinespace
+Flask $\rightarrow$ QuickChart & HTTPS (\texttt{POST}) & Puerto 5000 $\rightarrow$ Nube & JSON de Chart.js & Pinta las últimas 20 lecturas en QuickChart.io y redirige (\texttt{302}). \\ \bottomrule
+\end{tabular}
+\caption{Resumen del recorrido del dato entre los módulos del proyecto.}
+\end{table}
+
+\section{Simulación del Sensor y Comunicación Serial (\texttt{simulador\_serial.py})}
+
+Toda la lógica del sensor está dentro de la función \texttt{main()} del archivo \texttt{2\_simulador\_serial/simulador\_serial.py}:
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.35em]
+    \item \textbf{Por qué se modela con Distribución Normal(80, 5) (\texttt{random.gauss(80, 5)}):}
+    En el aire real, la cantidad de partículas en suspensión no salta de un extremo a otro en un segundo. Si usáramos un aleatorio simple como \texttt{randint(0, 200)}, la curva daría saltos irreales (por ejemplo, de 15 a 190 en un segundo). En cambio, la distribución normal centrada en media $\mu = 80$ con desviación estándar $\sigma = 5$ hace que la mayoría de los valores se agrupen cerca de $80\,\mu\text{g/m}^3$ y se muevan suavemente entre $70$ y $90\,\mu\text{g/m}^3$ (y casi nunca salgan de $65$ a $95$), tal como pide el punto 5 de la pauta.
+
+    \item \textbf{Por qué la trama lleva salto de línea (\texttt{\textbackslash r\textbackslash n}) y se usa \texttt{puerto.flush()}:}
+    Al enviar por serial se transforma el número en texto terminado en \texttt{\textbackslash r\textbackslash n} y se codifica a bytes (\texttt{.encode("utf-8")}). Ese salto de línea final es indispensable porque en Lazarus el componente \texttt{PuertoSerial} (\texttt{TLazSerial}) tiene activada la opción \texttt{RcvLineCRLF = True}: gracias a eso, Lazarus espera hasta ver el salto de línea antes de entregar el dato completo, evitando leer números cortados por la mitad. Inmediatamente después de escribir con \texttt{puerto.write()}, se llama a \texttt{puerto.flush()} para obligar a Windows a vaciar el búfer serial al instante, manteniendo el ritmo exacto de 1 muestra por segundo (\texttt{time.sleep(1.0)}).
+\end{itemize}
+
+\section{Visor Gráfico y Dibujo Dinámico en Lazarus (\texttt{main.pas} y \texttt{main.lfm})}
+
+El formulario principal (\texttt{TFormPrincipal} en \texttt{3\_visor\_mp25\_lazarus/main.pas}) concentra el trabajo de interfaz gráfica con el componente \texttt{GraficoMP25} (\texttt{TChart}) y su serie \texttt{SerieMP25} (\texttt{TLineSeries}).
+
+\subsection{Efecto de Movimiento Continuo (\emph{Scrolling Left} en 30 muestras)}
+
+En Lazarus un gráfico no avanza solo en el tiempo; para lograr el efecto de desplazamiento hacia la izquierda se combinan dos procedimientos:
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item \textbf{Recepción y corrimiento de datos (\texttt{PuertoSerialRxData}):}
+    El programa guarda en memoria un arreglo fijo de 30 casilleros llamado \texttt{historial\_mp25[0..29]} (que parte inicializado en cero en \texttt{FormCreate}). Cada vez que entra una línea por el puerto \texttt{COM2}, se valida que sea un número entero con \texttt{TryStrToInt} y un ciclo \texttt{for} mueve todos los elementos un puesto hacia la izquierda (\texttt{historial\_mp25[j] := historial\_mp25[j + 1]}). Con esto, el dato más viejo (posición \texttt{0}) sale de la ventana y el dato recién llegado se guarda en la última posición de la derecha (posición \texttt{29}).
+
+    \item \textbf{Borrado y repintado rápido (\texttt{ActualizarGrafico}):}
+    Apenas se actualiza el arreglo, \texttt{ActualizarGrafico} congela momentáneamente el refresco de la serie (\texttt{BeginUpdate}), borra los puntos anteriores (\texttt{SerieMP25.Clear}), vuelve a insertar los 30 puntos del \texttt{0} al \texttt{29} con \texttt{SerieMP25.AddXY(j, historial\_mp25[j])} y libera el dibujo (\texttt{EndUpdate}). Como la ventana tiene activado \texttt{DoubleBuffered = True}, ese borrado y repintado ocurre en memoria antes de mostrarse en el monitor, por lo que el ojo ve que la curva camina suavemente hacia la izquierda cada segundo.
+\end{itemize}
+
+\subsection{Por qué se Fijan los Ejes y Cómo Funcionan las Propiedades de \texttt{TChart}}
+
+Al arrancar el programa en \texttt{FormCreate}, se configuran por código tanto los límites del gráfico como las propiedades visuales exigidas en los puntos 9, 10 y 11 del PDF:
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item \textbf{Piso y techo fijos (\texttt{Extent}):}
+    Por defecto, \texttt{TChart} auto-ajusta sus ejes según los valores que tenga en ese momento. Si no lo bloqueáramos, cada vez que entrara un valor distinto la escala vertical saltaría y toda la curva temblaría. Por eso en \texttt{FormCreate} fijamos el eje Y entre \texttt{0} y \texttt{200} ($\mu\text{g/m}^3$) y el eje X entre \texttt{0} y \texttt{29} muestras, dejando la estructura del visor firme como un instrumento de medición real.
+
+    \item \textbf{Trazo y vértices de la curva (\texttt{SeriesColor}, \texttt{LinePen} y \texttt{Pointer}):}
+    \texttt{SeriesColor} y \texttt{LinePen} definen el color rojo (\texttt{clRed}) y el grosor de 2 píxeles de la línea que une las muestras, mientras que \texttt{Pointer} dibuja el pequeño cuadrado azul/celeste (\texttt{psRectangle}) sobre cada vértice para distinguir dónde cae exactamente cada segundo.
+
+    \item \textbf{Cajitas de valores sobre cada punto (\texttt{Marks}, \texttt{Frame} y \texttt{LabelBrush}):}
+    La propiedad \texttt{Marks} con estilo \texttt{smsValue} hace que cada punto muestre arriba su valor numérico. El detalle visual más importante aquí es el por qué de \texttt{LabelBrush} y \texttt{Frame}: como el fondo del gráfico es una ilustración a todo color (con árboles, montañas y cielo), si escribiéramos el número suelto no se leería nada. Al darle un relleno sólido claro (\texttt{LabelBrush}) rodeado por un borde negro (\texttt{Frame}), cada número queda dentro de una cajita opaca que se lee perfecto sobre cualquier imagen de fondo.
+
+    \item \textbf{Títulos y Leyenda (\texttt{Title}, \texttt{BottomAxis.Title}, \texttt{LeftAxis.Title} y \texttt{Legend}):}
+    Configuran el título superior (\emph{``Material Particulado 2.5 um''}), el subtítulo inferior (\emph{``Sampling MP 2.5um''}), la unidad vertical rotada 90 grados (\emph{``[ug/m3]''}) y el recuadro de leyenda arriba a la derecha (\emph{``MP 2.5 um''}).
+\end{itemize}
+
+\subsection{Cómo se Pintan los 6 Paisajes de Fondo sin Parpadeo (\texttt{DibujarFondoGrafico})}
+
+El componente \texttt{TChart} dibuja su contenido por capas: primero pinta el recuadro de fondo (\emph{BackWall}), encima dibuja la grilla punteada y los ejes, y al final traza la curva roja con sus cajitas de números.
+
+Para colocar los 6 paisajes (\texttt{img1.png} a \texttt{img6.png}) detrás de la curva sin tapar la grilla ni los datos, enganchamos nuestro procedimiento \texttt{DibujarFondoGrafico} al evento \texttt{OnAfterDrawBackWall} del gráfico:
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item \textbf{El problema de rendimiento:} Si cada vez que entra un dato serial (cada 1 segundo) el programa tuviera que tomar la imagen PNG original y estirarla (\texttt{StretchDraw}) al ancho y alto del gráfico, gastaría procesador innecesariamente y la imagen parpadearía.
+    \item \textbf{La solución con caché en memoria RAM (\texttt{bitmap\_fondo\_cache}):} Al iniciar en \texttt{FormCreate} cargamos las 6 fotos en el arreglo \texttt{imagenes\_fondo[1..6]} (partiendo en el paisaje 6, igual que en el video del profesor). Cuando se dibuja el gráfico por primera vez, estiramos el paisaje actual una sola vez dentro de un objeto en memoria RAM llamado \texttt{bitmap\_fondo\_cache}. En todos los segundos siguientes, \texttt{DibujarFondoGrafico} ve que el tamaño no ha cambiado y simplemente estampa esa imagen ya lista desde la RAM (\texttt{ACanvas.Draw}), lo que toma menos de un milisegundo y evita cualquier parpadeo.
+\end{itemize}
+
+\subsection{Botones de la Interfaz (\texttt{Save}, \texttt{On/off}, \texttt{Click}), Íconos y Propiedad \texttt{Hint}}
+
+Los tres botones exigidos en la pauta son componentes \texttt{TBitBtn} cuyos íconos (\texttt{Glyph}) se cargan dinámicamente en \texttt{FormCreate} usando rutas relativas (\texttt{ObtenerCarpetaBase}), junto con el ícono de la ventana (\texttt{sms2.bmp} en \texttt{Self.Icon}). Todos tienen activada su propiedad \texttt{Hint} y \texttt{ShowHint = True} para mostrar el cartel explicativo al pasar el cursor por encima:
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item \textbf{Botón \texttt{Save} (\texttt{BtnSaveClick}, ícono \texttt{camara.png}):}
+    Usa el método nativo \texttt{GraficoMP25.SaveToFile(TPortableNetworkGraphic, ...)} para exportar todo lo que se ve actualmente en el gráfico (paisaje, grilla, títulos y curva) directamente al archivo \texttt{captura.png} (y además guarda una copia con fecha y hora en la carpeta \texttt{capturas/}).
+
+    \item \textbf{Botón \texttt{On/off} (\texttt{BtnOnOffClick}, ícono \texttt{f02.bmp}):}
+    Conmuta la variable booleana \texttt{grilla\_activa} (\texttt{grilla\_activa := not grilla\_activa}) y se la asigna a \texttt{LeftAxis.Grid.Visible} y \texttt{BottomAxis.Grid.Visible}, encendiendo o apagando la cuadrícula punteada al instante.
+
+    \item \textbf{Botón \texttt{Click} (\texttt{BtnClickFondoClick}, ícono \texttt{pale.png}):}
+    Avanza el contador \texttt{indice\_fondo} del \texttt{1} al \texttt{6} (volviendo a \texttt{1} después del \texttt{6}), limpia las dimensiones de \texttt{bitmap\_fondo\_cache} para obligar a que estire la nueva foto y llama a \texttt{GraficoMP25.Invalidate} para refrescar el paisaje en pantalla.
+
+    \item \textbf{Controles de conexión (\texttt{ChkConectarSerial}, \texttt{ChkEnviarTCP} y \texttt{TimerReconexion}):}
+    Para comodidad durante las pruebas y la defensa, las casillas de puerto serial y envío TCP parten activadas desde el arranque. Si al abrir el visor aún no se le ha dado \emph{Play} al \texttt{COM2} en VSPE, \texttt{TimerReconexionTimer} reintenta conectar en silencio cada 2 segundos hasta que el puerto esté disponible.
+\end{itemize}
+
+\subsection{Envío por Socket TCP sin Congelar la Ventana (\texttt{EnviarMP25PorTCP})}
+
+Cada vez que \texttt{PuertoSerialRxData} recibe un valor de $\text{MP}_{2.5}$ y actualiza el gráfico, llama a la función \texttt{EnviarMP25PorTCP(valor\_mp25)} para mandarle el dato al servidor TCP en \texttt{127.0.0.1:9000}.
+
+\textbf{Por qué se usa un socket no bloqueante de 80 ms:} En Windows, si un programa gráfico intenta hacer un \texttt{connect} normal hacia un puerto cuyo servidor está apagado, Windows deja esperando al programa cerca de 2 segundos antes de dar error; eso haría que toda la ventana de Lazarus se quedara pegada (\emph{``No responde''}). Para evitarlo, en \texttt{EnviarMP25PorTCP} ponemos el socket en modo no bloqueante (\texttt{ioctlsocket} con \texttt{FIONBIO}) y usamos \texttt{select} con un tiempo de espera de apenas 80 milisegundos. Si el servidor TCP está encendido, conecta y envía el número (\texttt{send}) en menos de 1 milisegundo; y si el servidor TCP está apagado, a los 80 milisegundos avisa en la etiqueta de estado (\emph{``TCP: Sin Servidor''}) y la curva sigue moviéndose con total fluidez.
+
+\section{Servidor TCP en Consola y Base de Datos SQLite (\texttt{server\_tcp.lpr})}
+
+El servidor (\texttt{1\_server\_tcp\_lazarus/server\_tcp.lpr}) cumple el punto 12 del PDF: recibir cada medición por TCP/IP en modo consola, mostrarla en pantalla y guardarla con fecha y hora en la tabla \texttt{Aire} de SQLite. Se divide en tres partes principales:
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.35em]
+    \item \textbf{Creación de \texttt{aire.db} y por qué es clave el modo \texttt{WAL} (\texttt{IniciarBaseDatos}):}
+    Al arrancar el servidor, \texttt{IniciarBaseDatos} abre o crea el archivo \texttt{aire.db} y ejecuta \texttt{CREATE TABLE IF NOT EXISTS Aire (id, fecha, hora, mp25)}. Justo antes de crear la tabla, ejecuta la instrucción \texttt{PRAGMA journal\_mode=WAL;} (\emph{Write-Ahead Logging}).
+    
+    \textbf{El por qué de \texttt{WAL}:} En el modo tradicional de SQLite, cuando un programa escribe en la base de datos bloquea el archivo entero. Como nuestro servidor inserta un dato nuevo cada 1 segundo, si abriéramos \texttt{aire.db} al mismo tiempo en \textbf{HeidiSQL} o desde el servidor web \textbf{Flask}, chocarían y saldría el error \texttt{database is locked}. Con el modo \texttt{WAL} activado, las inserciones nuevas se van guardando en un archivo auxiliar (\texttt{aire.db-wal}) sin bloquear las lecturas, permitiendo que el servidor TCP escriba cada segundo y que nosotros consultemos y refresquemos HeidiSQL o Flask en vivo sin que jamás se bloquee.
+
+    \item \textbf{Escucha de red en el puerto 9000 (\texttt{EjecutarServidorTCP}):}
+    Usa la librería nativa de sockets de Windows (\texttt{WinSock2}). Crea el \texttt{socket\_servidor}, activa la opción \texttt{SO\_REUSEADDR} (para que si cerramos y volvemos a abrir el servidor no diga que el puerto 9000 sigue ocupado), lo enlaza al puerto \texttt{9000} con \texttt{bind}, lo pone en escucha con \texttt{listen} y entra en un ciclo infinito \texttt{while True} esperando conexiones del visor con \texttt{accept}. Cuando entra el paquete del visor, lee los bytes con \texttt{recv} y le pasa la línea a \texttt{ProcesarLinea}.
+
+    \item \textbf{Estampado de Fecha/Hora e inserción en la tabla \texttt{Aire} (\texttt{ProcesarLinea} y \texttt{GuardarEnSQLite}):}
+    \texttt{ProcesarLinea} extrae el número entero con \texttt{ExtraerNumero}, obtiene la fecha (\texttt{yyyy-mm-dd}) y la hora (\texttt{hh:nn:ss}) del reloj del sistema usando \texttt{FormatDateTime} y llama a \texttt{GuardarEnSQLite}. Adentro, \texttt{GuardarEnSQLite} usa un componente \texttt{TSQLQuery} con parámetros (\texttt{:f}, \texttt{:h}, \texttt{:m}) para hacer el \texttt{INSERT INTO Aire}, confirma la transacción con \texttt{Commit} y devuelve el \texttt{id} generado para imprimir en la consola el mensaje completo con número de registro, fecha, hora y valor de $\text{MP}_{2.5}$. En la misma carpeta está el archivo \texttt{sqlite3.dll} (de 64 bits), necesario para que tanto el ejecutable de Lazarus como HeidiSQL puedan abrir motores SQLite3 en Windows de 64 bits.
+\end{itemize}
+
+\section{Auditoría en Tiempo Real (HeidiSQL) y Gráfica Web (\texttt{app\_quickchart.py})}
+
+Para cerrar el flujo de datos y demostrar que la base de datos realmente se está alimentando en vivo, el proyecto cuenta con dos vías de visualización externa:
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.35em]
+    \item \textbf{Verificación en tiempo real con HeidiSQL 12.3 Portable (Punto 13 del PDF):}
+    En HeidiSQL se crea una sesión seleccionando el tipo de red \textbf{SQLite}, indicando como librería el archivo \texttt{1\_server\_tcp\_lazarus/sqlite3.dll} y como archivo de base de datos \texttt{1\_server\_tcp\_lazarus/aire.db}. Una vez abierta la base, podemos ir a la pestaña \textbf{Datos} de la tabla \texttt{Aire} y presionar \textbf{F5} (o ejecutar en la pestaña \textbf{Consulta} un \texttt{SELECT * FROM Aire ORDER BY id DESC LIMIT 20;}) para ver cómo se agregan las filas segundo a segundo con la misma fecha, hora y valor que muestra la consola del servidor TCP.
+
+    \item \textbf{Servidor Web Flask y Gráfica en la Nube con QuickChart.io (\texttt{4\_quickchart\_web/app\_quickchart.py}):}
+    Siguiendo lo explicado por el profesor en la clase complementaria del 3 de noviembre, el script \texttt{app\_quickchart.py} levanta un servidor Flask en el puerto \texttt{5000} que se conecta de forma relativa a \texttt{../1\_server\_tcp\_lazarus/aire.db} mediante \texttt{obtener\_conexion\_bd()} y ofrece tres rutas:
+    \begin{enumerate}[leftmargin=1.5em, itemsep=0.2em]
+        \item \textbf{Ruta principal \texttt{/} (función \texttt{index()}):} Muestra un panel web con el estado de conexión a \texttt{aire.db}, el total de muestras acumuladas en la tabla \texttt{Aire}, el último valor registrado y una tabla con las últimas 15 lecturas que se auto-refresca cada 3 segundos.
+        \item \textbf{Ruta \texttt{/grafica} (función \texttt{obtener\_grafica()}):} Consulta las últimas 20 filas de la tabla \texttt{Aire} (\texttt{ORDER BY id DESC LIMIT 20}) y luego invierte la lista con \texttt{filas.reverse()}. Se invierte porque la consulta SQL trae desde la más nueva hasta la más antigua, pero en un gráfico de tiempo necesitamos que el eje X avance de izquierda (más antiguo) a derecha (más reciente). Con esas 20 horas y valores arma el diccionario \texttt{configuracion\_grafica} con la estructura de \textbf{Chart.js} (curva roja con puntos azules), lo envía mediante una petición \texttt{requests.post} a \texttt{https://quickchart.io/chart/create}, recibe la URL de la imagen generada y redirige automáticamente al navegador con \texttt{redirect(url\_grafica, code=302)}.
+        \item \textbf{Ruta \texttt{/datos} (función \texttt{obtener\_datos()}):} Devuelve en formato JSON las últimas 30 filas de la tabla \texttt{Aire} para poder inspeccionarlas directamente desde el navegador.
+    \end{enumerate}
+\end{itemize}
+
+\end{document}

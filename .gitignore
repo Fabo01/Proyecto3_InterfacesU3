@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# Base de datos SQLite y archivos de transaccion WAL generados en ejecucion
+1_server_tcp_lazarus/*.db
+1_server_tcp_lazarus/*.db-wal
+1_server_tcp_lazarus/*.db-shm
+
+# Archivos objeto, unidades compiladas y ejecutables del Servidor TCP
+1_server_tcp_lazarus/*.o
+1_server_tcp_lazarus/*.ppu
+1_server_tcp_lazarus/*.exe
+1_server_tcp_lazarus/lib/
+1_server_tcp_lazarus/backup/
+
+# Archivos objeto, temporales de sesion y ejecutables del Visor GUI Lazarus
+3_visor_mp25_lazarus/lib/
+3_visor_mp25_lazarus/backup/
+3_visor_mp25_lazarus/*.exe
+3_visor_mp25_lazarus/*.o
+3_visor_mp25_lazarus/*.ppu
+3_visor_mp25_lazarus/*.or
+3_visor_mp25_lazarus/*.compiled
+3_visor_mp25_lazarus/*.lps
+
+# Capturas de pantalla generadas por el visor
+3_visor_mp25_lazarus/captura.png
+3_visor_mp25_lazarus/capturas/*.png
+
+# Programa externo HeidiSQL Portable
+HeidiSQL/
